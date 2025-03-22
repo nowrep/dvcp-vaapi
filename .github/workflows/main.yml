@@ -1,0 +1,36 @@
+name: Main
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  BUILD_TYPE: release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Dependencies
+      run: |
+        sudo apt update
+        sudo apt install meson libva-dev libdrm-dev
+
+    - name: Configure
+      run: meson setup --buildtype ${{env.BUILD_TYPE}} ${{github.workspace}}/build
+
+    - name: Build
+      run: meson compile -C ${{github.workspace}}/build
+
+    - name: Create bundle
+      run: mkdir -p bundle/vaapi_encoder.dvcp.bundle/Contents/Linux-x86-64 && cp ${{github.workspace}}/build/vaapi_encoder.dvcp bundle/vaapi_encoder.dvcp.bundle/Contents/Linux-x86-64
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: vaapi_encoder.dvcp.bundle
+        path: bundle/
