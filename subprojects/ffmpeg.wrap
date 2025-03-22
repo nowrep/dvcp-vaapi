@@ -1,0 +1,5 @@
+[wrap-git]
+url = https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg.git
+revision = meson-7.1
+depth = 1
+diff_files = ffmpeg-vaapi.patch, hevc1.patch, hevc2.patch

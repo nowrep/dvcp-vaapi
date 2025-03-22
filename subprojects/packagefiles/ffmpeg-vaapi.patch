@@ -1,0 +1,33 @@
+diff --git a/meson.build b/meson.build
+index f2c90c3..f8dd187 100644
+--- a/meson.build
++++ b/meson.build
+@@ -1257,6 +1257,7 @@ check_types = [
+   ['VAProcPipelineParameterBuffer', ['va/va.h', 'va/va_vpp.h']],
+   ['VAEncPictureParameterBufferH264', ['va/va.h', 'va/va_enc_h264.h']],
+   ['VAEncPictureParameterBufferHEVC', ['va/va.h', 'va/va_enc_hevc.h']],
++  ['VAEncPictureParameterBufferAV1', ['va/va.h', 'va/va_enc_av1.h']],
+   ['VAEncPictureParameterBufferJPEG', ['va/va.h', 'va/va_enc_mpeg2.h']],
+   ['VAEncPictureParameterBufferMPEG2', ['va/va.h', 'va/va_enc_mpeg2.h']],
+   ['VAEncPictureParameterBufferVP8', ['va/va.h', 'va/va_enc_vp8.h']],
+@@ -3242,8 +3243,10 @@ endif
+ 
+ add_project_arguments(project_c_args, language: 'c')
+ 
++libdrm_dep = dependency('libdrm')
++
+ libavcodec_optional_deps = [iconv_extra_deps + android_extra_deps]
+-libavutil_optional_deps = [vaapi_drm_extra_deps + vaapi_x11_extra_deps + vdpau_x11_extra_deps]
++libavutil_optional_deps = [vaapi_drm_extra_deps + vaapi_x11_extra_deps + vdpau_x11_extra_deps + libdrm_dep]
+ libswresample_optional_deps = [libsoxr_extra_deps]
+ 
+ common_deps += libm_extra_deps
+@@ -3362,6 +3365,8 @@ if conf.get('aarch64', 0) == 1
+   final_conf.set('AS_ARCH_LEVEL', as_arch_level)
+ endif
+ 
++final_conf.set('HAVE_VAAPI_WIN32', '0')
++
+ foreach config: config_list + config_extra
+   final_conf.set('CONFIG_@0@'.format(config.to_upper()), conf.get(config.to_lower()))
+ endforeach
