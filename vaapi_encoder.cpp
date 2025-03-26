@@ -350,8 +350,8 @@ StatusCode VAAPIEncoder::RegisterCodecs(HostListRef *p_pList)
     addCodec(uuid_h264, FOURCC_AVC, "VAAPI H.264", "YUV 420 8-bit", 8);
     addCodec(uuid_hevc_8, FOURCC_HEVC, "VAAPI H.265", "YUV 420 8-bit", 8);
     addCodec(uuid_hevc_10, FOURCC_HEVC, "VAAPI H.265", "YUV 420 10-bit", 10);
-    addCodec(uuid_av1_8, FOURCC_AV1, "VAAPI AV1", "YUV 420 8-bit", 8);
-    addCodec(uuid_av1_10, FOURCC_AV1, "VAAPI AV1", "YUV 420 10-bit", 10);
+    // addCodec(uuid_av1_8, FOURCC_AV1, "VAAPI AV1", "YUV 420 8-bit", 8);
+    // addCodec(uuid_av1_10, FOURCC_AV1, "VAAPI AV1", "YUV 420 10-bit", 10);
 
     return errNone;
 }
