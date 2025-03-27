@@ -56,6 +56,7 @@ shared_module(
   link_args: [
     '-Wl,-Bsymbolic',
     '-Wl,--no-undefined',
+    '-Wl,--exclude-libs=ALL',
     '-static-libstdc++',
     '-static-libgcc',
   ]
