@@ -16,7 +16,7 @@ extern "C" {
 enum {
     FOURCC_AVC = 1635148593,
     FOURCC_HEVC = 1752589105,
-    FOURCC_AV1 = 1635135776,
+    FOURCC_AV1 = 1635135537,
 };
 
 static const uint8_t uuid_h264[] = { 0x01, 0x6f, 0x34, 0x71, 0x31, 0x17, 0x42, 0x05, 0xbf, 0x55, 0x37, 0x1c, 0xb0, 0xac, 0x66, 0x20 };
@@ -350,8 +350,8 @@ StatusCode VAAPIEncoder::RegisterCodecs(HostListRef *p_pList)
     addCodec(uuid_h264, FOURCC_AVC, "VAAPI H.264", "YUV 420 8-bit", 8);
     addCodec(uuid_hevc_8, FOURCC_HEVC, "VAAPI H.265", "YUV 420 8-bit", 8);
     addCodec(uuid_hevc_10, FOURCC_HEVC, "VAAPI H.265", "YUV 420 10-bit", 10);
-    // addCodec(uuid_av1_8, FOURCC_AV1, "VAAPI AV1", "YUV 420 8-bit", 8);
-    // addCodec(uuid_av1_10, FOURCC_AV1, "VAAPI AV1", "YUV 420 10-bit", 10);
+    addCodec(uuid_av1_8, FOURCC_AV1, "VAAPI AV1", "YUV 420 8-bit", 8);
+    addCodec(uuid_av1_10, FOURCC_AV1, "VAAPI AV1", "YUV 420 10-bit", 10);
 
     return errNone;
 }
