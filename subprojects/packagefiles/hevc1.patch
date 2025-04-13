@@ -1,27 +1,23 @@
-From bcfbf2bac8f9eeeedc407b40596f5c7aaa0d5b47 Mon Sep 17 00:00:00 2001
+From db4e92ea9238f0093e0a66c64b00bae2e04cb745 Mon Sep 17 00:00:00 2001
 From: David Rosca <nowrep@gmail.com>
-Date: Tue, 22 Oct 2024 17:26:58 +0200
-Subject: [PATCH] lavc/vaapi_encode: Query surface alignment
+Date: Sun, 13 Apr 2025 15:02:41 +0200
+Subject: [PATCH] vaapi surface alignment
 
-It needs to create temporary config to query surface attribute.
-
-Signed-off-by: Timo Rothenpieler <timo@rothenpieler.org>
 ---
- libavcodec/vaapi_encode.c | 66 +++++++++++++++++++++++++++++++++++++++
+ libavcodec/vaapi_encode.c | 62 +++++++++++++++++++++++++++++++++++++++
  libavcodec/vaapi_encode.h |  4 +++
- 2 files changed, 70 insertions(+)
+ 2 files changed, 66 insertions(+)
 
 diff --git a/libavcodec/vaapi_encode.c b/libavcodec/vaapi_encode.c
-index b593d976ef6b6..8960e6b20afa2 100644
+index 16a9a36..d825233 100644
 --- a/libavcodec/vaapi_encode.c
 +++ b/libavcodec/vaapi_encode.c
-@@ -1133,6 +1133,68 @@ static av_cold int vaapi_encode_profile_entrypoint(AVCodecContext *avctx)
+@@ -1133,6 +1133,64 @@ fail:
      return err;
  }
  
 +static av_cold int vaapi_encode_surface_alignment(av_unused AVCodecContext *avctx)
 +{
-+#if VA_CHECK_VERSION(1, 21, 0)
 +    VAAPIEncodeContext *ctx = avctx->priv_data;
 +    VASurfaceAttrib *attr_list = NULL;
 +    unsigned int attr_count = 0;
@@ -63,7 +59,7 @@ index b593d976ef6b6..8960e6b20afa2 100644
 +    }
 +
 +    for (unsigned int i = 0; i < attr_count; i++) {
-+        if (attr_list[i].type == VASurfaceAttribAlignmentSize) {
++        if (attr_list[i].type == 10 /*VASurfaceAttribAlignmentSize*/) {
 +            ctx->surface_alignment_width =
 +                1 << (attr_list[i].value.value.i & 0xf);
 +            ctx->surface_alignment_height =
@@ -76,15 +72,12 @@ index b593d976ef6b6..8960e6b20afa2 100644
 +    av_freep(&attr_list);
 +    vaDestroyConfig(ctx->hwctx->display, va_config);
 +    return err;
-+#else
-+    return 0;
-+#endif
 +}
 +
  static const VAAPIEncodeRCMode vaapi_encode_rc_modes[] = {
      //                                  Bitrate   Quality
      //                                     | Maxrate | HRD/VBV
-@@ -2111,6 +2173,10 @@ av_cold int ff_vaapi_encode_init(AVCodecContext *avctx)
+@@ -2111,6 +2169,10 @@ av_cold int ff_vaapi_encode_init(AVCodecContext *avctx)
      if (err < 0)
          goto fail;
  
@@ -96,7 +89,7 @@ index b593d976ef6b6..8960e6b20afa2 100644
          err = ctx->codec->get_encoder_caps(avctx);
          if (err < 0)
 diff --git a/libavcodec/vaapi_encode.h b/libavcodec/vaapi_encode.h
-index 40a3f4e064e6e..8e3eab9f27722 100644
+index c4f8539..ca5cfe9 100644
 --- a/libavcodec/vaapi_encode.h
 +++ b/libavcodec/vaapi_encode.h
 @@ -260,6 +260,10 @@ typedef struct VAAPIEncodeContext {
@@ -110,3 +103,6 @@ index 40a3f4e064e6e..8e3eab9f27722 100644
  } VAAPIEncodeContext;
  
  typedef struct VAAPIEncodeType {
+-- 
+2.49.0
+
