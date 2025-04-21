@@ -44,4 +44,7 @@ private:
     int m_ColorModel;
     std::unique_ptr<UISettingsController> m_pSettings;
     HostCodecConfigCommon m_CommonProps;
+    std::vector<uint8_t> m_configExtradata;
+    bool m_sentFirstPacket = false;
+    std::string m_containerFormat;
 };
