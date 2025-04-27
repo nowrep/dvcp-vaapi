@@ -557,10 +557,10 @@ StatusCode VAAPIEncoder::DoOpen(HostBufferRef *p_pBuff)
     settings.Load(p_pBuff);
     std::string container;
     if (p_pBuff->GetString(pIOPropContainerList, container)) {
-        printf("✅ Selected container: %s\n", container.c_str());
+        g_Log(logLevelInfo, "✅ Selected container: %s\n", container.c_str());
         m_containerFormat = container;
     } else {
-        printf("❌ Failed to retrieve container from pIOPropContainerList\n");
+        g_Log(logLevelError, "❌ Failed to retrieve container from pIOPropContainerList\n");
     }
 
     int16_t primaries = 0;
