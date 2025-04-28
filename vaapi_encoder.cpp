@@ -25,6 +25,198 @@ static const uint8_t uuid_hevc_10[] = { 0x01, 0x6f, 0x34, 0x71, 0x31, 0x17, 0x42
 static const uint8_t uuid_av1_8[] = { 0x01, 0x6f, 0x34, 0x71, 0x31, 0x17, 0x42, 0x05, 0xbf, 0x55, 0x37, 0x1c, 0xb0, 0xac, 0x66, 0x23 };
 static const uint8_t uuid_av1_10[] = { 0x01, 0x6f, 0x34, 0x71, 0x31, 0x17, 0x42, 0x05, 0xbf, 0x55, 0x37, 0x1c, 0xb0, 0xac, 0x66, 0x24 };
 
+// H264 MP4
+static bool ConvertAnnexBToAVCC(const uint8_t* annexb_data, size_t annexb_size,
+                                std::vector<uint8_t>& out_avcc)
+{
+    if (!annexb_data || annexb_size < 6) return false;
+
+    size_t offset = 0;
+    std::vector<std::vector<uint8_t>> sps_list;
+    std::vector<std::vector<uint8_t>> pps_list;
+
+    while (offset + 4 < annexb_size) {
+        if (annexb_data[offset] != 0 || annexb_data[offset+1] != 0 ||
+            annexb_data[offset+2] != 0 || annexb_data[offset+3] != 1) {
+            offset++;
+        continue;
+            }
+
+            size_t nal_start = offset + 4;
+            size_t nal_end = annexb_size;
+
+            for (size_t i = nal_start; i + 4 < annexb_size; ++i) {
+                if (annexb_data[i] == 0 && annexb_data[i+1] == 0 &&
+                    annexb_data[i+2] == 0 && annexb_data[i+3] == 1) {
+                    nal_end = i;
+                break;
+                    }
+            }
+
+            size_t nal_size = nal_end - nal_start;
+            if (nal_size < 1) {
+                offset = nal_end;
+                continue;
+            }
+
+            uint8_t nal_type = annexb_data[nal_start] & 0x1F;
+            std::vector<uint8_t> nal(annexb_data + nal_start, annexb_data + nal_end);
+
+            if (nal_type == 7) sps_list.push_back(nal);
+            else if (nal_type == 8) pps_list.push_back(nal);
+
+            offset = nal_end;
+    }
+
+    if (sps_list.empty() || pps_list.empty()) return false;
+
+    const std::vector<uint8_t>& sps = sps_list[0];
+
+    out_avcc.clear();
+    out_avcc.push_back(0x01);                // configurationVersion
+    out_avcc.push_back(sps[1]);              // AVCProfileIndication
+    out_avcc.push_back(sps[2]);              // profile_compatibility
+    out_avcc.push_back(sps[3]);              // AVCLevelIndication
+    out_avcc.push_back(0xFF);                // lengthSizeMinusOne = 4 bytes
+
+    out_avcc.push_back(0xE0 | sps_list.size());
+    for (const auto& s : sps_list) {
+        out_avcc.push_back((s.size() >> 8) & 0xFF);
+        out_avcc.push_back(s.size() & 0xFF);
+        out_avcc.insert(out_avcc.end(), s.begin(), s.end());
+    }
+
+    out_avcc.push_back(pps_list.size());
+    for (const auto& p : pps_list) {
+        out_avcc.push_back((p.size() >> 8) & 0xFF);
+        out_avcc.push_back(p.size() & 0xFF);
+        out_avcc.insert(out_avcc.end(), p.begin(), p.end());
+    }
+
+    return true;
+}
+
+// HEVC MP4
+static bool ConvertAnnexBToHVCC(const uint8_t* annexb_data, size_t annexb_size,
+                                std::vector<uint8_t>& out_hvcc,
+                                uint8_t bitDepthLuma, uint8_t bitDepthChroma,
+                                uint32_t frameRateNum = 0, uint32_t frameRateDen = 0)
+{
+    if (!annexb_data || annexb_size < 6) return false;
+
+    size_t offset = 0;
+    std::vector<std::vector<uint8_t>> vps_list;
+    std::vector<std::vector<uint8_t>> sps_list;
+    std::vector<std::vector<uint8_t>> pps_list;
+
+    while (offset + 4 < annexb_size) {
+        // Detect start code
+        size_t start_code_size = 0;
+        if (annexb_data[offset] == 0 && annexb_data[offset+1] == 0 && annexb_data[offset+2] == 1) {
+            start_code_size = 3;
+        } else if (annexb_data[offset] == 0 && annexb_data[offset+1] == 0 && annexb_data[offset+2] == 0 && annexb_data[offset+3] == 1) {
+            start_code_size = 4;
+        } else {
+            offset++;
+            continue;
+        }
+
+        offset += start_code_size;
+        size_t nal_start = offset;
+        size_t nal_end = annexb_size;
+
+        for (size_t i = offset; i + 3 < annexb_size; ++i) {
+            if (annexb_data[i] == 0 && annexb_data[i+1] == 0 && (annexb_data[i+2] == 1 || (annexb_data[i+2] == 0 && annexb_data[i+3] == 1))) {
+                nal_end = i;
+                break;
+            }
+        }
+
+        if (nal_end <= nal_start) continue;
+
+        uint8_t nal_unit_type = (annexb_data[nal_start] >> 1) & 0x3F;
+        std::vector<uint8_t> nal(annexb_data + nal_start, annexb_data + nal_end);
+
+        switch (nal_unit_type) {
+            case 32: vps_list.push_back(nal); break; // VPS
+            case 33: sps_list.push_back(nal); break; // SPS
+            case 34: pps_list.push_back(nal); break; // PPS
+            default: break;
+        }
+
+        offset = nal_end;
+    }
+
+    if (vps_list.empty() || sps_list.empty() || pps_list.empty())
+        return false;
+
+    const std::vector<uint8_t>& sps = sps_list[0];
+
+    uint8_t general_profile_space = (sps[1] >> 6) & 0x03;
+    uint8_t general_tier_flag = (sps[1] >> 5) & 0x01;
+    uint8_t general_profile_idc = sps[1] & 0x1F;
+    uint32_t general_profile_compatibility_flags = (sps[2] << 24) | (sps[3] << 16) | (sps[4] << 8) | sps[5];
+    uint64_t general_constraint_indicator_flags =
+    ((uint64_t)sps[6] << 40) | ((uint64_t)sps[7] << 32) |
+    ((uint64_t)sps[8] << 24) | ((uint64_t)sps[9] << 16) |
+    ((uint64_t)sps[10] << 8) | sps[11];
+    uint8_t general_level_idc = sps[12];
+
+    out_hvcc.clear();
+    out_hvcc.push_back(1); // configurationVersion
+    out_hvcc.push_back((general_profile_space << 6) | (general_tier_flag << 5) | general_profile_idc);
+    out_hvcc.push_back((general_profile_compatibility_flags >> 24) & 0xFF);
+    out_hvcc.push_back((general_profile_compatibility_flags >> 16) & 0xFF);
+    out_hvcc.push_back((general_profile_compatibility_flags >> 8) & 0xFF);
+    out_hvcc.push_back(general_profile_compatibility_flags & 0xFF);
+
+    for (int i = 5; i >= 0; --i)
+        out_hvcc.push_back((general_constraint_indicator_flags >> (i * 8)) & 0xFF);
+
+    out_hvcc.push_back(general_level_idc);
+
+    // reserved (4 bits) + min_spatial_segmentation_idc (12 bits)
+    out_hvcc.push_back(0xF0); // reserved (4 bits set to 1)
+    out_hvcc.push_back(0x00); // min_spatial_segmentation_idc = 0
+
+    out_hvcc.push_back(0xFC); // reserved + parallelismType = 0 (unknown)
+    out_hvcc.push_back(0xFC | (0 & 0x03)); // reserved + chromaFormatIdc=0 (monochrome, will be overridden if needed)
+
+    out_hvcc.push_back(0xF8 | ((bitDepthLuma - 8) & 0x07));   // bitDepthLumaMinus8
+    out_hvcc.push_back(0xF8 | ((bitDepthChroma - 8) & 0x07)); // bitDepthChromaMinus8
+
+    if (frameRateNum > 0 && frameRateDen > 0) {
+        uint32_t avgFrameRate = (frameRateNum * 1000 + (frameRateDen/2)) / frameRateDen; // FPS x1000
+        out_hvcc.push_back((avgFrameRate >> 8) & 0xFF);
+        out_hvcc.push_back(avgFrameRate & 0xFF);
+    } else {
+        out_hvcc.push_back(0x00);
+        out_hvcc.push_back(0x00);
+    }
+
+    // constantFrameRate = 1 (fixed framerate), numTemporalLayers = 0, temporalIdNested = 1, lengthSizeMinusOne = 3
+    out_hvcc.push_back((1 << 6) | (0 << 3) | (1 << 2) | 3);
+
+    out_hvcc.push_back(3); // numOfArrays (VPS + SPS + PPS)
+
+    auto append_array = [&](uint8_t nal_unit_type, const std::vector<std::vector<uint8_t>>& nals) {
+        out_hvcc.push_back(0x80 | nal_unit_type); // array_completeness + NAL unit type
+        out_hvcc.push_back(static_cast<uint8_t>(nals.size()));
+        for (const auto& nal : nals) {
+            out_hvcc.push_back((nal.size() >> 8) & 0xFF);
+            out_hvcc.push_back(nal.size() & 0xFF);
+            out_hvcc.insert(out_hvcc.end(), nal.begin(), nal.end());
+        }
+    };
+
+    append_array(32, vps_list); // VPS
+    append_array(33, sps_list); // SPS
+    append_array(34, pps_list); // PPS
+
+    return true;
+}
+
+
 class UISettingsController
 {
 public:
@@ -380,6 +572,13 @@ StatusCode VAAPIEncoder::DoOpen(HostBufferRef *p_pBuff)
 
     UISettingsController settings(m_CommonProps);
     settings.Load(p_pBuff);
+    std::string container;
+    if (p_pBuff->GetString(pIOPropContainerList, container)) {
+        g_Log(logLevelInfo, "✅ Selected container: %s\n", container.c_str());
+        m_containerFormat = container;
+    } else {
+        g_Log(logLevelError, "❌ Failed to retrieve container from pIOPropContainerList\n");
+    }
 
     int16_t primaries = 0;
     if (!p_pBuff->GetINT16(pIOPropColorPrimaries, primaries))
@@ -463,8 +662,43 @@ StatusCode VAAPIEncoder::DoOpen(HostBufferRef *p_pBuff)
         return errFail;
     }
 
-    if (m_codec->extradata_size)
-        p_pBuff->SetProperty(pIOPropMagicCookie, propTypeUInt8, m_codec->extradata, m_codec->extradata_size);
+    if (m_codec->extradata_size) {
+        if (m_containerFormat == "mp4") {
+            if (!strcmp(m_name, "h264_vaapi")) {
+                std::vector<uint8_t> avcc;
+                if (ConvertAnnexBToAVCC(m_codec->extradata, m_codec->extradata_size, avcc)) {
+                    p_pBuff->SetProperty(pIOPropMagicCookie, propTypeUInt8, avcc.data(), static_cast<int>(avcc.size()));
+                    m_configExtradata = std::move(avcc);
+                    m_sentFirstPacket = false;
+                } else {
+                    g_Log(logLevelError, "VAAPI :: Failed to convert H.264 extradata to AVCC");
+                }
+            } else if (!strcmp(m_name, "hevc_vaapi")) {
+                std::vector<uint8_t> hvcc;
+                uint8_t bitDepthLumaMinus8 = m_depth - 8;
+                uint8_t bitDepthChromaMinus8 = m_depth - 8;
+                uint32_t avgFrameRateNum = m_CommonProps.GetFrameRateNum();
+                uint32_t avgFrameRateDen = m_CommonProps.GetFrameRateDen();
+
+                if (ConvertAnnexBToHVCC(m_codec->extradata, m_codec->extradata_size, hvcc,
+                    bitDepthLumaMinus8, bitDepthChromaMinus8,
+                    avgFrameRateNum, avgFrameRateDen))
+                {
+                    p_pBuff->SetProperty(pIOPropMagicCookie, propTypeUInt8, hvcc.data(), static_cast<int>(hvcc.size()));
+                    m_configExtradata = std::move(hvcc);
+                    m_sentFirstPacket = false;
+                } else {
+                    g_Log(logLevelError, "VAAPI :: Failed to convert HEVC extradata to hvcC");
+                }
+            } else {
+                // AV1 MP4
+                p_pBuff->SetProperty(pIOPropMagicCookie, propTypeUInt8, m_codec->extradata, m_codec->extradata_size);
+            }
+        } else {
+            // MOV
+            p_pBuff->SetProperty(pIOPropMagicCookie, propTypeUInt8, m_codec->extradata, m_codec->extradata_size);
+        }
+    }
 
     uint8_t multiPass = 0;
     p_pBuff->SetProperty(pIOPropMultiPass, propTypeUInt8, &multiPass, 1);
@@ -588,17 +822,28 @@ StatusCode VAAPIEncoder::ReceiveData()
         if (!outBuf.IsValid() || !outBuf.Resize(pkt->size))
             return errAlloc;
 
+        uint8_t isKeyFrame = pkt->flags & AV_PKT_FLAG_KEY;
+
         char *buf = nullptr;
         size_t bufSize = 0;
-        if (!outBuf.LockBuffer(&buf, &bufSize))
-            return errAlloc;
+        if (!m_sentFirstPacket && isKeyFrame && !m_configExtradata.empty() && m_containerFormat == "mp4") {
+            size_t totalSize = m_configExtradata.size() + pkt->size;
+            if (!outBuf.Resize(totalSize)) return errAlloc;
 
-        memcpy(buf, pkt->data, pkt->size);
+            if (!outBuf.LockBuffer(&buf, &bufSize)) return errAlloc;
+
+            memcpy(buf, m_configExtradata.data(), m_configExtradata.size());
+            memcpy(buf + m_configExtradata.size(), pkt->data, pkt->size);
+
+            m_sentFirstPacket = true;
+            g_Log(logLevelInfo, "VAAPI :: Injected extradata into first keyframe");
+        } else {
+            if (!outBuf.LockBuffer(&buf, &bufSize)) return errAlloc;
+            memcpy(buf, pkt->data, pkt->size);
+        }
 
         outBuf.SetProperty(pIOPropPTS, propTypeInt64, &pkt->pts, 1);
         outBuf.SetProperty(pIOPropDTS, propTypeInt64, &pkt->dts, 1);
-
-        uint8_t isKeyFrame = pkt->flags & AV_PKT_FLAG_KEY;
         outBuf.SetProperty(pIOPropIsKeyFrame, propTypeUInt8, &isKeyFrame, 1);
 
         av_packet_unref(pkt);
